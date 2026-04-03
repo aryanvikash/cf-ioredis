@@ -91,6 +91,15 @@ const redis = new Redis({
 })
 ```
 
+### Run the repo example
+
+```bash
+npm run build
+npm run example:ws
+```
+
+This example lives in `examples/node-websocket/` and shows the correct shutdown pattern for WebSocket transport with `await redis.quit()`.
+
 ## Supported API
 
 The current surface focuses on string and key operations.

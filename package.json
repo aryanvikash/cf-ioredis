@@ -1,7 +1,8 @@
 {
-  "name": "cf-redis-kv",
+  "name": "cf-ioredis",
   "version": "0.1.0",
-  "description": "ioredis-style client backed by Cloudflare KV over HTTP",
+  "description": "ioredis-style client backed by Cloudflare KV over HTTP and WebSocket",
+  "author": "Aryan Vikash",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -21,6 +22,7 @@
   "scripts": {
     "build": "tsup",
     "clean": "rm -rf dist",
+    "example:ws": "node examples/node-websocket/index.js",
     "test": "vitest run test/unit",
     "test:integration": "vitest run test/integration",
     "test:integration:deployed": "CF_REDIS_KV_TEST_URL='cfkv://test@cf-redis-kv-worker.aryanvikash.workers.dev' CF_REDIS_KV_TEST_WS_URL='wss://cf-redis-kv-worker.aryanvikash.workers.dev/ws' vitest run test/integration/deployedWorker.test.ts",
