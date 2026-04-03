@@ -1,13 +1,13 @@
-# cf-redis-kv
+# cf-ioredis
 
-`cf-redis-kv` provides an `ioredis`-style API over a Cloudflare KV backend with both HTTP and WebSocket transports.
+`cf-ioredis` provides an `ioredis`-style API over a Cloudflare KV backend with both HTTP and WebSocket transports.
 
 This is not a real Redis transport. It is a Redis-shaped client for the subset of operations that can map cleanly to a Worker-backed Cloudflare KV service.
 
 ## Install
 
 ```bash
-npm install cf-redis-kv
+npm install cf-ioredis
 ```
 
 ## Deploy Worker
@@ -51,7 +51,7 @@ The URL is converted to an HTTPS Worker base URL internally.
 ### Read from env
 
 ```ts
-import { Redis } from 'cf-redis-kv'
+import { Redis } from 'cf-ioredis'
 
 const redis = new Redis()
 const value = await redis.get('user:1')
@@ -60,7 +60,7 @@ const value = await redis.get('user:1')
 ### Override env with URL
 
 ```ts
-import { Redis } from 'cf-redis-kv'
+import { Redis } from 'cf-ioredis'
 
 const redis = new Redis('cfkv://token@worker.example.com/kv?keyPrefix=demo:')
 await redis.set('user:1', 'alice')
@@ -69,7 +69,7 @@ await redis.set('user:1', 'alice')
 ### Use options object
 
 ```ts
-import { Redis } from 'cf-redis-kv'
+import { Redis } from 'cf-ioredis'
 
 const redis = new Redis({
   url: 'cfkv://token@worker.example.com/kv',
@@ -81,7 +81,7 @@ const redis = new Redis({
 ### Use WebSocket transport
 
 ```ts
-import { Redis } from 'cf-redis-kv'
+import { Redis } from 'cf-ioredis'
 
 const redis = new Redis({
   url: 'cfkv://token@worker.example.com/kv',
