@@ -16,7 +16,7 @@ import type {
 import type { KvRecord } from '../types/responses'
 import { decodeValue, encodeValue } from '../utils/encoding'
 
-export class WorkerKvClient implements KvTransport {
+export class HttpWorkerTransport implements KvTransport {
   constructor(private readonly config: ResolvedConfig) {}
 
   async get(key: RedisKey): Promise<KvRecord> {
@@ -104,6 +104,8 @@ export class WorkerKvClient implements KvTransport {
     const response = await this.request<WorkerTypeResponse>('GET', `/type?key=${encodeURIComponent(key)}`)
     return response.type
   }
+
+  async close(): Promise<void> {}
 
   private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
     const controller = new AbortController()

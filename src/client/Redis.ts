@@ -11,7 +11,7 @@ import {
 } from '../commands/keys'
 import { assertCommandSupported } from '../commands/unsupported'
 import { resolveConfig } from '../config/resolveConfig'
-import { WorkerKvClient } from '../core/worker-client'
+import { createTransport } from '../core/createTransport'
 import type { KvTransport } from '../core/transport'
 import type { RedisOptions } from '../types/config'
 import type { BulkStringReply, IntegerReply, StatusReply } from '../types/responses'
@@ -26,7 +26,7 @@ export class Redis {
 
   constructor(input?: string | RedisOptions) {
     this.options = resolveConfig(input)
-    this.transport = new WorkerKvClient(this.options)
+    this.transport = createTransport(this.options)
   }
 
   async get(key: string): Promise<BulkStringReply> {
@@ -99,19 +99,25 @@ export class Redis {
       ? input
       : {
           url: `cfkv://${this.options.token ? `${this.options.token}@` : ''}${serializedUrl.host}${serializedUrl.pathname}`,
-      timeoutMs: this.options.timeoutMs,
-      keyPrefix: this.options.keyPrefix,
-      allowEmulatedCommands: this.options.allowEmulatedCommands,
-      headers: this.options.headers,
-      fetch: this.options.fetch
+          timeoutMs: this.options.timeoutMs,
+          keyPrefix: this.options.keyPrefix,
+          allowEmulatedCommands: this.options.allowEmulatedCommands,
+          transport: this.options.transport,
+          wsUrl: this.options.wsUrl,
+          headers: this.options.headers,
+          fetch: this.options.fetch,
+          webSocketFactory: this.options.webSocketFactory
         }
 
     return new Redis(duplicateUrl)
   }
 
-  disconnect(): void {}
+  disconnect(): void {
+    void this.transport.close()
+  }
 
   async quit(): Promise<StatusReply> {
+    await this.transport.close()
     return 'OK'
   }
 

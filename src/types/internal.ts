@@ -53,3 +53,19 @@ export interface WorkerMSetRequest {
     options?: SetOptions
   }>
 }
+
+export interface WsRequestEnvelope {
+  id: string
+  action: string
+  payload?: unknown
+}
+
+export interface WsResponseEnvelope {
+  id: string
+  ok: boolean
+  data?: unknown
+  error?: {
+    message: string
+    code?: string
+  }
+}

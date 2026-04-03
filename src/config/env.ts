@@ -10,6 +10,8 @@ export function readEnvConfig(env: EnvMap = process.env): RedisOptions {
     token: env.CLOUDFLARE_KV_TOKEN,
     timeoutMs: timeoutRaw ? Number.parseInt(timeoutRaw, 10) : undefined,
     keyPrefix: env.CLOUDFLARE_KV_KEY_PREFIX,
+    transport: env.CLOUDFLARE_KV_TRANSPORT as RedisOptions['transport'],
+    wsUrl: env.CLOUDFLARE_KV_WS_URL,
     headers: undefined
   }
 }

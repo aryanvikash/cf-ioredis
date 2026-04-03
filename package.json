@@ -21,7 +21,13 @@
   "scripts": {
     "build": "tsup",
     "clean": "rm -rf dist",
-    "test": "vitest run",
+    "test": "vitest run test/unit",
+    "test:integration": "vitest run test/integration",
+    "test:integration:deployed": "CF_REDIS_KV_TEST_URL='cfkv://test@cf-redis-kv-worker.aryanvikash.workers.dev' CF_REDIS_KV_TEST_WS_URL='wss://cf-redis-kv-worker.aryanvikash.workers.dev/ws' vitest run test/integration/deployedWorker.test.ts",
+    "test:integration:deployed:ws": "CF_REDIS_KV_TEST_URL='cfkv://test@cf-redis-kv-worker.aryanvikash.workers.dev' CF_REDIS_KV_TEST_WS_URL='wss://cf-redis-kv-worker.aryanvikash.workers.dev/ws' CF_REDIS_KV_RUN_WS_INTEGRATION=true vitest run test/integration/deployedWorker.test.ts",
+    "test:integration:local": "vitest run test/integration/localWorker.test.ts",
+    "bench:local": "vitest run test/integration/localWorker.test.ts -t latency",
+    "test:all": "npm test && npm run test:integration",
     "test:watch": "vitest"
   },
   "keywords": [
@@ -36,6 +42,7 @@
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
+    "hono": "^4.8.3",
     "tsup": "^8.5.0",
     "typescript": "^5.8.3",
     "vitest": "^3.1.1"

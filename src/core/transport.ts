@@ -12,4 +12,5 @@ export interface KvTransport {
   ttl(key: RedisKey): Promise<number>
   persist(key: RedisKey): Promise<boolean>
   type(key: RedisKey): Promise<'string' | 'none'>
+  close(): Promise<void>
 }

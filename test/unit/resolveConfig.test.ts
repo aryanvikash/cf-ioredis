@@ -10,6 +10,8 @@ describe('resolveConfig', () => {
     delete process.env.CLOUDFLARE_KV_TOKEN
     delete process.env.CLOUDFLARE_KV_TIMEOUT_MS
     delete process.env.CLOUDFLARE_KV_KEY_PREFIX
+    delete process.env.CLOUDFLARE_KV_TRANSPORT
+    delete process.env.CLOUDFLARE_KV_WS_URL
   })
 
   it('prefers constructor url over env url', () => {
@@ -41,5 +43,38 @@ describe('resolveConfig', () => {
     expect(config.timeoutMs).toBe(2000)
     expect(config.keyPrefix).toBe('env:')
     expect(config.source).toBe('env')
+  })
+
+  it('defaults transport to http', () => {
+    const config = resolveConfig({
+      url: 'cfkv://token@worker.example.com/root',
+      fetch: vi.fn() as unknown as typeof fetch
+    })
+
+    expect(config.transport).toBe('http')
+    expect(config.wsUrl).toBeUndefined()
+  })
+
+  it('resolves websocket transport from env', () => {
+    process.env.CLOUDFLARE_KV_URL = 'cfkv://env-token@worker.example.com/root'
+    process.env.CLOUDFLARE_KV_TRANSPORT = 'ws'
+    process.env.CLOUDFLARE_KV_WS_URL = 'wss://worker.example.com/root/ws'
+
+    const config = resolveConfig({
+      fetch: vi.fn() as unknown as typeof fetch,
+      webSocketFactory: vi.fn()
+    })
+
+    expect(config.transport).toBe('ws')
+    expect(config.wsUrl).toBe('wss://worker.example.com/root/ws')
+  })
+
+  it('requires wsUrl for websocket transport', () => {
+    expect(() => resolveConfig({
+      url: 'cfkv://token@worker.example.com/root',
+      transport: 'ws',
+      fetch: vi.fn() as unknown as typeof fetch,
+      webSocketFactory: vi.fn()
+    })).toThrowError('Missing WebSocket URL')
   })
 })
