@@ -15,18 +15,21 @@ import { createTransport } from '../core/createTransport'
 import type { KvTransport } from '../core/transport'
 import type { RedisOptions } from '../types/config'
 import type { BulkStringReply, IntegerReply, StatusReply } from '../types/responses'
-import type { RedisValue, SetOptions } from '../types/commands'
+import type { RedisEventListener, RedisEventName, RedisValue, SetOptions } from '../types/commands'
 import { applyKeyPrefix, applyKeyPrefixToMany } from '../utils/key-prefix'
 import { Pipeline } from './Pipeline'
+import { PubSubManager } from './PubSubManager'
 import { Transaction } from './Transaction'
 
 export class Redis {
   readonly options: ReturnType<typeof resolveConfig>
   private readonly transport: KvTransport
+  private readonly pubsub: PubSubManager
 
   constructor(input?: string | RedisOptions) {
     this.options = resolveConfig(input)
     this.transport = createTransport(this.options)
+    this.pubsub = new PubSubManager(this.options)
   }
 
   async get(key: string): Promise<BulkStringReply> {
@@ -83,6 +86,36 @@ export class Redis {
     return typeCommand(this.transport, this.prefixed(key))
   }
 
+  async publish(channel: string, message: string): Promise<IntegerReply> {
+    assertCommandSupported('publish', this.options.allowEmulatedCommands)
+    return await this.pubsub.publish(channel, String(message))
+  }
+
+  async subscribe(...channels: string[]): Promise<IntegerReply> {
+    assertCommandSupported('subscribe', this.options.allowEmulatedCommands)
+    return await this.pubsub.subscribe(...channels)
+  }
+
+  async unsubscribe(...channels: string[]): Promise<IntegerReply> {
+    assertCommandSupported('unsubscribe', this.options.allowEmulatedCommands)
+    return await this.pubsub.unsubscribe(...channels)
+  }
+
+  on<T extends RedisEventName>(event: T, listener: RedisEventListener<T>): this {
+    this.pubsub.on(event, listener)
+    return this
+  }
+
+  off<T extends RedisEventName>(event: T, listener: RedisEventListener<T>): this {
+    this.pubsub.off(event, listener)
+    return this
+  }
+
+  once<T extends RedisEventName>(event: T, listener: RedisEventListener<T>): this {
+    this.pubsub.once(event, listener)
+    return this
+  }
+
   pipeline(): Pipeline {
     assertCommandSupported('pipeline', this.options.allowEmulatedCommands)
     return new Pipeline(this)
@@ -114,10 +147,14 @@ export class Redis {
 
   disconnect(): void {
     void this.transport.close()
+    void this.pubsub.close()
   }
 
   async quit(): Promise<StatusReply> {
-    await this.transport.close()
+    await Promise.allSettled([
+      this.transport.close(),
+      this.pubsub.close()
+    ])
     return 'OK'
   }
 

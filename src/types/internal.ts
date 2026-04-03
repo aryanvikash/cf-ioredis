@@ -54,6 +54,15 @@ export interface WorkerMSetRequest {
   }>
 }
 
+export interface WorkerPublishRequest {
+  channel: string
+  message: string
+}
+
+export interface WorkerPublishResponse {
+  receivers: number
+}
+
 export interface WsRequestEnvelope {
   id: string
   action: string
@@ -69,3 +78,67 @@ export interface WsResponseEnvelope {
     code?: string
   }
 }
+
+export interface PubSubSubscribeFrame {
+  type: 'subscribe'
+  channels: string[]
+}
+
+export interface PubSubUnsubscribeFrame {
+  type: 'unsubscribe'
+  channels?: string[]
+}
+
+export interface PubSubPingFrame {
+  type: 'ping'
+}
+
+export interface PubSubPublishFrame {
+  type: 'publish'
+  channel: string
+  message: string
+}
+
+export type PubSubClientFrame = PubSubSubscribeFrame | PubSubUnsubscribeFrame | PubSubPingFrame | PubSubPublishFrame
+
+export interface PubSubSubscribeAckFrame {
+  type: 'subscribe'
+  channel: string
+  count: number
+}
+
+export interface PubSubUnsubscribeAckFrame {
+  type: 'unsubscribe'
+  channel: string
+  count: number
+}
+
+export interface PubSubMessageFrame {
+  type: 'message'
+  channel: string
+  message: string
+}
+
+export interface PubSubPongFrame {
+  type: 'pong'
+}
+
+export interface PubSubPublishAckFrame {
+  type: 'publish'
+  channel: string
+  receivers: number
+}
+
+export interface PubSubErrorFrame {
+  type: 'error'
+  message: string
+  code?: string
+}
+
+export type PubSubServerFrame =
+  | PubSubSubscribeAckFrame
+  | PubSubUnsubscribeAckFrame
+  | PubSubMessageFrame
+  | PubSubPongFrame
+  | PubSubPublishAckFrame
+  | PubSubErrorFrame

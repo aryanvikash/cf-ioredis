@@ -86,4 +86,82 @@ describe('websocket transport', () => {
     await expect(redis.quit()).resolves.toBe('OK')
     expect(socketRef?.readyState).toBe(3)
   })
+
+  it('supports pubsub events and publish counts', async () => {
+    const subscribers = new Map<string, FakeWebSocket>()
+    const fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input))
+
+      if (url.pathname.endsWith('/publish')) {
+        const body = JSON.parse(String(init?.body)) as { channel: string; message: string }
+        const socket = subscribers.get(body.channel)
+
+        if (socket) {
+          socket.reply({
+            type: 'message',
+            channel: body.channel,
+            message: body.message
+          })
+        }
+
+        return new Response(JSON.stringify({ receivers: socket ? 1 : 0 }), { status: 200 })
+      }
+
+      throw new Error(`Unhandled URL ${url}`)
+    }) as unknown as typeof fetch
+
+    const redis = new Redis({
+      url: 'cfkv://token@worker.example.com/root',
+      wsUrl: 'wss://worker.example.com/root/ws',
+      webSocketFactory: (url: string) => new FakeWebSocket((raw, socket) => {
+        const frame = JSON.parse(raw) as { type: string; channel?: string; message?: string }
+        const channel = new URL(url).searchParams.get('channel') as string
+
+        if (frame.type === 'subscribe') {
+          subscribers.set(channel, socket)
+          socket.reply({ type: 'subscribe', channel, count: 1 })
+        }
+
+        if (frame.type === 'publish') {
+          socket.reply({ type: 'message', channel, message: frame.message })
+          socket.reply({ type: 'publish', channel, receivers: 1 })
+        }
+
+        if (frame.type === 'unsubscribe') {
+          subscribers.delete(channel)
+          socket.reply({ type: 'unsubscribe', channel, count: 0 })
+        }
+      }),
+      fetch
+    })
+
+    const received: Array<[string, string]> = []
+    redis.on('message', (channel, message) => {
+      received.push([channel, message])
+    })
+
+    await expect(redis.subscribe('updates')).resolves.toBe(1)
+    await expect(redis.publish('updates', 'hello')).resolves.toBe(1)
+    expect(received).toEqual([['updates', 'hello']])
+    expect(fetch).not.toHaveBeenCalled()
+    await expect(redis.unsubscribe('updates')).resolves.toBe(0)
+    await expect(redis.quit()).resolves.toBe('OK')
+  })
+
+  it('falls back to HTTP publish without an active pubsub socket', async () => {
+    const fetch = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as { channel: string; message: string }
+      return new Response(JSON.stringify({ receivers: body.channel === 'updates' && body.message === 'hello' ? 1 : 0 }), { status: 200 })
+    }) as unknown as typeof fetch
+
+    const redis = new Redis({
+      url: 'cfkv://token@worker.example.com/root',
+      wsUrl: 'wss://worker.example.com/root/ws',
+      fetch,
+      webSocketFactory: vi.fn()
+    })
+
+    await expect(redis.publish('updates', 'hello')).resolves.toBe(1)
+    expect(fetch).toHaveBeenCalledTimes(1)
+  })
 })

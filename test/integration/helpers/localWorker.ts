@@ -2,7 +2,8 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 export interface LocalWorkerHandle {
   httpUrl: string
@@ -11,7 +12,7 @@ export interface LocalWorkerHandle {
   stop: () => Promise<void>
 }
 
-const WORKER_DIR = '/Users/vikashkumar/projects/cloudflare-items/redis/worker'
+const WORKER_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '../../../../worker')
 const WRANGLER_BIN = join(WORKER_DIR, 'node_modules', '.bin', 'wrangler')
 const HOST = '127.0.0.1'
 const TOKEN = 'test'

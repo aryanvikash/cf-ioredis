@@ -100,6 +100,47 @@ npm run example:ws
 
 This example lives in `examples/node-websocket/` and shows the correct shutdown pattern for WebSocket transport with `await redis.quit()`.
 
+### Pub/Sub
+
+```ts
+import { Redis } from 'cf-ioredis'
+
+const publisher = new Redis({
+  url: 'cfkv://token@worker.example.com/kv',
+  wsUrl: 'wss://worker.example.com/ws'
+})
+
+const subscriber = new Redis({
+  url: 'cfkv://token@worker.example.com/kv',
+  wsUrl: 'wss://worker.example.com/ws'
+})
+
+subscriber.on('message', (channel, message) => {
+  console.log(channel, message)
+})
+
+await subscriber.subscribe('updates')
+await publisher.publish('updates', 'hello')
+await subscriber.unsubscribe('updates')
+await Promise.all([publisher.quit(), subscriber.quit()])
+```
+
+Pub/sub behavior:
+
+- `subscribe` and `unsubscribe` use a dedicated WebSocket pub/sub connection
+- `publish` prefers WebSocket when there is an active pub/sub socket for that channel
+- `publish` falls back to HTTP `POST /publish` when no active pub/sub socket is available
+- v1 supports exact channel names only, with live delivery only
+
+### Run the pub/sub example
+
+```bash
+npm run build
+npm run example:pubsub
+```
+
+This example lives in `examples/node-pubsub/`.
+
 ## Supported API
 
 The current surface focuses on string and key operations.
@@ -120,12 +161,14 @@ The current surface focuses on string and key operations.
 | `type` | supported | returns `string` or `none` |
 | `pipeline` | supported | local queued batch executor |
 | `multi` | emulated | requires `allowEmulatedCommands: true`, not atomic |
+| `publish` | supported | uses pub/sub WS when active, otherwise HTTP fallback |
+| `subscribe` | supported | exact channel names only, requires `wsUrl` and WebSocket support |
+| `unsubscribe` | supported | exact channel names only, requires `wsUrl` and WebSocket support |
 | `quit` | supported | returns `"OK"` |
 | `disconnect` | supported | no-op compatibility method |
 
 ## Unsupported API Families
 
-- pub/sub
 - hashes
 - lists
 - sets
@@ -213,7 +256,9 @@ The library expects a Worker or HTTP service that exposes operations like:
 - `GET /ttl?key=...`
 - `POST /persist`
 - `GET /type?key=...`
+- `POST /publish`
 - `GET /ws` for WebSocket upgrade
+- `GET /pubsub/ws?channel=...` for pub/sub WebSocket upgrade
 
 Payloads are JSON and values are encoded into a small envelope so future non-string types can be introduced without changing storage format.
 
@@ -230,6 +275,18 @@ WebSocket messages use the same action model as the transport layer:
 ```
 
 Responses are correlated by `id` and return either `data` or a typed error payload.
+
+Pub/sub uses a separate WebSocket protocol with frames like:
+
+```json
+{ "type": "subscribe", "channels": ["updates"] }
+```
+
+and message deliveries like:
+
+```json
+{ "type": "message", "channel": "updates", "message": "hello" }
+```
 
 ## Development
 

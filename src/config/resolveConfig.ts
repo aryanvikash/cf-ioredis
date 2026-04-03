@@ -16,19 +16,15 @@ function resolveFetch(override?: typeof fetch): typeof fetch {
   return globalThis.fetch
 }
 
-function resolveWebSocketFactory(transport: ResolvedConfig['transport'], override?: WebSocketFactory): WebSocketFactory | undefined {
+function resolveWebSocketFactory(override?: WebSocketFactory): WebSocketFactory | undefined {
   if (override) {
     return override
-  }
-
-  if (transport !== 'ws') {
-    return undefined
   }
 
   const webSocketCtor = globalThis.WebSocket as undefined | (new (url: string) => WebSocketLike)
 
   if (typeof webSocketCtor !== 'function') {
-    throw new ConfigError('Global WebSocket is not available; provide a webSocketFactory in Redis options')
+    return undefined
   }
 
   return (url: string) => new webSocketCtor(url)
@@ -75,6 +71,12 @@ export function resolveConfig(input?: string | RedisOptions): ResolvedConfig {
     throw new ConfigError('Missing WebSocket URL. Set `CLOUDFLARE_KV_WS_URL` or pass `wsUrl` when `transport` is `ws`')
   }
 
+  const webSocketFactory = resolveWebSocketFactory(constructorOptions.webSocketFactory)
+
+  if (transport === 'ws' && !webSocketFactory) {
+    throw new ConfigError('Global WebSocket is not available; provide a webSocketFactory in Redis options')
+  }
+
   return {
     baseUrl: finalBaseUrl,
     token: constructorOptions.token ?? parsedUrl?.token ?? envConfig.token,
@@ -85,7 +87,7 @@ export function resolveConfig(input?: string | RedisOptions): ResolvedConfig {
     wsUrl,
     headers: constructorOptions.headers ?? {},
     fetch: resolveFetch(constructorOptions.fetch),
-    webSocketFactory: resolveWebSocketFactory(transport, constructorOptions.webSocketFactory),
+    webSocketFactory,
     source
   }
 }

@@ -23,3 +23,13 @@ export interface CommandMetadata {
   nonAtomic?: boolean
   notes?: string
 }
+
+export interface RedisEventMap {
+  message: [channel: string, message: string]
+  subscribe: [channel: string, count: number]
+  unsubscribe: [channel: string, count: number]
+}
+
+export type RedisEventName = keyof RedisEventMap
+
+export type RedisEventListener<T extends RedisEventName = RedisEventName> = (...args: RedisEventMap[T]) => void

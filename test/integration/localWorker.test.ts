@@ -26,12 +26,14 @@ describe.sequential('local worker end-to-end', () => {
   let handle: LocalWorkerHandle
   let httpRedis: Redis
   let wsRedis: Redis
+  let pubSubRedis: Redis
 
   beforeAll(async () => {
     handle = await startLocalWorker()
 
     httpRedis = new Redis({
       url: handle.httpUrl,
+      wsUrl: handle.wsUrl,
       timeoutMs: 30000,
       allowEmulatedCommands: true
     })
@@ -42,6 +44,12 @@ describe.sequential('local worker end-to-end', () => {
       wsUrl: handle.wsUrl,
       timeoutMs: 30000,
       allowEmulatedCommands: true
+    })
+
+    pubSubRedis = new Redis({
+      url: handle.httpUrl,
+      wsUrl: handle.wsUrl,
+      timeoutMs: 30000
     })
   }, 90000)
 
@@ -67,7 +75,8 @@ describe.sequential('local worker end-to-end', () => {
         scoped('ws:pipeline')
       ) ?? Promise.resolve(0),
       httpRedis?.quit() ?? Promise.resolve('OK'),
-      wsRedis?.quit() ?? Promise.resolve('OK')
+      wsRedis?.quit() ?? Promise.resolve('OK'),
+      pubSubRedis?.quit() ?? Promise.resolve('OK')
     ])
 
     await handle.stop()
@@ -172,4 +181,57 @@ describe.sequential('local worker end-to-end', () => {
     expect(httpSetLatency).toBeGreaterThan(0)
     expect(wsGetLatency).toBeGreaterThan(0)
   }, 60000)
+
+  it('supports live pubsub over durable objects', async () => {
+    const channel = scoped('pubsub')
+    const subscriberTwo = new Redis({
+      url: handle.httpUrl,
+      wsUrl: handle.wsUrl,
+      timeoutMs: 30000
+    })
+
+    const receivedOne: Array<[string, string]> = []
+    const receivedTwo: Array<[string, string]> = []
+
+    pubSubRedis.on('message', (receivedChannel, message) => {
+      receivedOne.push([receivedChannel, message])
+    })
+
+    subscriberTwo.on('message', (receivedChannel, message) => {
+      receivedTwo.push([receivedChannel, message])
+    })
+
+    await expect(pubSubRedis.subscribe(channel)).resolves.toBe(1)
+    await expect(subscriberTwo.subscribe(channel)).resolves.toBe(1)
+    await expect(httpRedis.publish(channel, 'hello-pubsub')).resolves.toBe(2)
+
+    await waitFor(() => receivedOne.length === 1 && receivedTwo.length === 1)
+    expect(receivedOne).toEqual([[channel, 'hello-pubsub']])
+    expect(receivedTwo).toEqual([[channel, 'hello-pubsub']])
+
+    await expect(subscriberTwo.unsubscribe(channel)).resolves.toBe(0)
+    await expect(httpRedis.publish(channel, 'only-one')).resolves.toBe(1)
+    await waitFor(() => receivedOne.length === 2)
+    expect(receivedOne).toEqual([[channel, 'hello-pubsub'], [channel, 'only-one']])
+    expect(receivedTwo).toEqual([[channel, 'hello-pubsub']])
+
+    await Promise.allSettled([
+      pubSubRedis.unsubscribe(channel),
+      subscriberTwo.quit()
+    ])
+  }, 60000)
 })
+
+async function waitFor(condition: () => boolean, timeoutMs = 5000): Promise<void> {
+  const startedAt = Date.now()
+
+  while (Date.now() - startedAt < timeoutMs) {
+    if (condition()) {
+      return
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 25))
+  }
+
+  throw new Error('Timed out waiting for pub/sub messages')
+}

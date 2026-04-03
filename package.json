@@ -22,6 +22,7 @@
   "scripts": {
     "build": "tsup",
     "clean": "rm -rf dist",
+    "example:pubsub": "node examples/node-pubsub/index.js",
     "example:ws": "node examples/node-websocket/index.js",
     "test": "vitest run test/unit",
     "test:integration": "vitest run test/integration",
