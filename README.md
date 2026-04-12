@@ -1,5 +1,7 @@
 # cf-ioredis
 
+[![Package CI/CD](https://github.com/aryanvikash/cf-ioredis/actions/workflows/package.yml/badge.svg?branch=main)](https://github.com/aryanvikash/cf-ioredis/actions/workflows/package.yml)
+
 `cf-ioredis` lets Node.js, servers, CLIs, and other non-Cloudflare runtimes use Cloudflare KV through an `ioredis`-style API. It connects to a companion Cloudflare Worker over HTTP or WebSocket.
 
 This library is built for code running outside Cloudflare Workers, where KV bindings are not directly available. It is not a real Redis transport; it is a Redis-shaped client for the subset of operations that can map cleanly to a Worker-backed Cloudflare KV service.
