@@ -127,7 +127,7 @@ export class PubSubManager {
     const factory = this.config.webSocketFactory
 
     if (!factory) {
-      throw new ConfigError('WebSocket is not available; provide `wsUrl` and a `webSocketFactory` when using pub/sub')
+      throw new ConfigError('WebSocket is not available; provide a `webSocketFactory` when using pub/sub')
     }
 
     const socket = factory(this.buildSocketUrl(channel))

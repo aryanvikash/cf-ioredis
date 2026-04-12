@@ -25,6 +25,7 @@ npm run example:pubsub
 The example uses:
 
 - `cfkv://test@cf-redis-kv-worker.aryanvikash.workers.dev`
-- `wss://cf-redis-kv-worker.aryanvikash.workers.dev/ws`
+
+The WebSocket URL is derived from the Worker URL.
 
 If you adapt these for your own worker, make sure to call `await redis.quit()` before exit when using WebSocket transport or pub/sub.

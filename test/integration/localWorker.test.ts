@@ -33,7 +33,6 @@ describe.sequential('local worker end-to-end', () => {
 
     httpRedis = new Redis({
       url: handle.httpUrl,
-      wsUrl: handle.wsUrl,
       timeoutMs: 30000,
       allowEmulatedCommands: true
     })
@@ -41,14 +40,12 @@ describe.sequential('local worker end-to-end', () => {
     wsRedis = new Redis({
       url: handle.httpUrl,
       transport: 'ws',
-      wsUrl: handle.wsUrl,
       timeoutMs: 30000,
       allowEmulatedCommands: true
     })
 
     pubSubRedis = new Redis({
       url: handle.httpUrl,
-      wsUrl: handle.wsUrl,
       timeoutMs: 30000
     })
   }, 90000)
@@ -186,7 +183,6 @@ describe.sequential('local worker end-to-end', () => {
     const channel = scoped('pubsub')
     const subscriberTwo = new Redis({
       url: handle.httpUrl,
-      wsUrl: handle.wsUrl,
       timeoutMs: 30000
     })
 

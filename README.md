@@ -1,8 +1,8 @@
 # cf-ioredis
 
-`cf-ioredis` provides an `ioredis`-style API over a Cloudflare KV backend with both HTTP and WebSocket transports.
+`cf-ioredis` lets Node.js, servers, CLIs, and other non-Cloudflare runtimes use Cloudflare KV through an `ioredis`-style API. It connects to a companion Cloudflare Worker over HTTP or WebSocket.
 
-This is not a real Redis transport. It is a Redis-shaped client for the subset of operations that can map cleanly to a Worker-backed Cloudflare KV service.
+This library is built for code running outside Cloudflare Workers, where KV bindings are not directly available. It is not a real Redis transport; it is a Redis-shaped client for the subset of operations that can map cleanly to a Worker-backed Cloudflare KV service.
 
 ## Install
 
@@ -16,39 +16,43 @@ npm install cf-ioredis
 
 Use this button to deploy the companion Cloudflare Worker to your own account before pointing the client at its HTTP or WebSocket URL.
 
+For a public template/deploy-button flow, `worker/wrangler.jsonc` is set up for automatic KV provisioning. Configure `AUTH_TOKEN` as a Worker secret if you want bearer-token protection.
+
 ## Configuration
 
-Config precedence is:
+Configuration is resolved in this order:
 
-1. constructor URL
-2. constructor options
-3. environment variables
-4. defaults
+1. Constructor URL
+2. Constructor options
+3. Environment variables
+4. Defaults
 
-### Environment variables
+### Environment Variables
 
-- `CLOUDFLARE_KV_URL`
-- `CLOUDFLARE_KV_TOKEN`
-- `CLOUDFLARE_KV_TIMEOUT_MS`
-- `CLOUDFLARE_KV_KEY_PREFIX`
-- `CLOUDFLARE_KV_TRANSPORT`
-- `CLOUDFLARE_KV_WS_URL`
+| Variable | Description |
+| --- | --- |
+| `CLOUDFLARE_KV_URL` | Worker URL in `cfkv://` or `redis+cfkv://` format |
+| `CLOUDFLARE_KV_TOKEN` | Bearer token for the Worker |
+| `CLOUDFLARE_KV_TIMEOUT_MS` | Request timeout in milliseconds |
+| `CLOUDFLARE_KV_KEY_PREFIX` | Prefix applied to keys before requests are sent |
+| `CLOUDFLARE_KV_TRANSPORT` | Transport mode: `http` or `ws` |
+| `CLOUDFLARE_KV_WS_URL` | Optional WebSocket URL override for custom routes |
 
-### URL format
+### URL Format
 
 Use `cfkv://` or `redis+cfkv://`.
 
-Example:
-
 ```text
-cfkv://token@worker.example.com/kv?timeoutMs=5000&keyPrefix=app:
+cfkv://token@worker.example.com?timeoutMs=5000&keyPrefix=app:
 ```
 
 The URL is converted to an HTTPS Worker base URL internally.
 
+The client appends Worker routes such as `/get`, `/set`, `/ws`, and `/pubsub/ws` under the hood. When `transport: 'ws'` or pub/sub opens a WebSocket, the WebSocket URL is derived from the same Worker URL. Use `wsUrl` or `CLOUDFLARE_KV_WS_URL` only to override that default.
+
 ## Usage
 
-### Read from env
+### Read From Environment
 
 ```ts
 import { Redis } from 'cf-ioredis'
@@ -57,48 +61,38 @@ const redis = new Redis()
 const value = await redis.get('user:1')
 ```
 
-### Override env with URL
+### Use a Connection URL
 
 ```ts
 import { Redis } from 'cf-ioredis'
 
-const redis = new Redis('cfkv://token@worker.example.com/kv?keyPrefix=demo:')
+const redis = new Redis('cfkv://token@worker.example.com?keyPrefix=demo:')
 await redis.set('user:1', 'alice')
 ```
 
-### Use options object
+### Use Options
 
 ```ts
 import { Redis } from 'cf-ioredis'
 
 const redis = new Redis({
-  url: 'cfkv://token@worker.example.com/kv',
+  url: 'cfkv://token@worker.example.com',
   timeoutMs: 3000,
   keyPrefix: 'app:'
 })
 ```
 
-### Use WebSocket transport
+### Use WebSocket Transport
 
 ```ts
 import { Redis } from 'cf-ioredis'
 
 const redis = new Redis({
-  url: 'cfkv://token@worker.example.com/kv',
+  url: 'cfkv://token@worker.example.com',
   transport: 'ws',
-  wsUrl: 'wss://worker.example.com/ws',
   allowEmulatedCommands: true
 })
 ```
-
-### Run the repo example
-
-```bash
-npm run build
-npm run example:ws
-```
-
-This example lives in `examples/node-websocket/` and shows the correct shutdown pattern for WebSocket transport with `await redis.quit()`.
 
 ### Pub/Sub
 
@@ -106,13 +100,11 @@ This example lives in `examples/node-websocket/` and shows the correct shutdown 
 import { Redis } from 'cf-ioredis'
 
 const publisher = new Redis({
-  url: 'cfkv://token@worker.example.com/kv',
-  wsUrl: 'wss://worker.example.com/ws'
+  url: 'cfkv://token@worker.example.com'
 })
 
 const subscriber = new Redis({
-  url: 'cfkv://token@worker.example.com/kv',
-  wsUrl: 'wss://worker.example.com/ws'
+  url: 'cfkv://token@worker.example.com'
 })
 
 subscriber.on('message', (channel, message) => {
@@ -127,21 +119,12 @@ await Promise.all([publisher.quit(), subscriber.quit()])
 
 Pub/sub behavior:
 
-- `subscribe` and `unsubscribe` use a dedicated WebSocket pub/sub connection
-- `publish` prefers WebSocket when there is an active pub/sub socket for that channel
-- `publish` falls back to HTTP `POST /publish` when no active pub/sub socket is available
-- v1 supports exact channel names only, with live delivery only
+- `subscribe` and `unsubscribe` use a dedicated WebSocket pub/sub connection.
+- `publish` prefers WebSocket when there is an active pub/sub socket for that channel.
+- `publish` falls back to HTTP `POST /publish` when no active pub/sub socket is available.
+- v1 supports exact channel names only, with live delivery only.
 
-### Run the pub/sub example
-
-```bash
-npm run build
-npm run example:pubsub
-```
-
-This example lives in `examples/node-pubsub/`.
-
-## Supported API
+## API Support
 
 The current surface focuses on string and key operations.
 
@@ -153,34 +136,36 @@ The current surface focuses on string and key operations.
 | `exists` | supported | integer reply |
 | `mget` | supported | ordered array of values |
 | `mset` | supported | object-based input in v1 |
-| `expire` | supported | seconds mapped to Worker ttl ms |
-| `pexpire` | supported | millisecond ttl |
-| `ttl` | supported | derived from Worker ms ttl |
-| `pttl` | supported | raw ms ttl |
-| `persist` | supported | removes ttl if Worker supports it |
+| `expire` | supported | seconds mapped to Worker TTL ms |
+| `pexpire` | supported | millisecond TTL |
+| `ttl` | supported | derived from Worker ms TTL |
+| `pttl` | supported | raw ms TTL |
+| `persist` | supported | removes TTL if Worker supports it |
 | `type` | supported | returns `string` or `none` |
 | `pipeline` | supported | local queued batch executor |
 | `multi` | emulated | requires `allowEmulatedCommands: true`, not atomic |
 | `publish` | supported | uses pub/sub WS when active, otherwise HTTP fallback |
-| `subscribe` | supported | exact channel names only, requires `wsUrl` and WebSocket support |
-| `unsubscribe` | supported | exact channel names only, requires `wsUrl` and WebSocket support |
+| `subscribe` | supported | exact channel names only, requires WebSocket support |
+| `unsubscribe` | supported | exact channel names only, requires WebSocket support |
 | `quit` | supported | returns `"OK"` |
 | `disconnect` | supported | no-op compatibility method |
 
-## Unsupported API Families
+### Unsupported API Families
 
-- hashes
-- lists
-- sets
-- sorted sets
-- streams
-- scripting
-- watch/unwatch
-- cluster/sentinel/server commands
+- Hashes
+- Lists
+- Sets
+- Sorted sets
+- Streams
+- Scripting
+- Watch/unwatch
+- Cluster, sentinel, and server commands
 
 Unsupported methods should throw `UnsupportedCommandError`.
 
-## Pipeline semantics
+## Command Semantics
+
+### Pipeline
 
 `pipeline()` queues commands locally and executes them in order.
 
@@ -200,49 +185,50 @@ Result format matches common `ioredis` tuple style:
 
 This is not Redis wire pipelining.
 
-## Transaction semantics
+### Transactions
 
 `multi()` is an emulated transaction-shaped wrapper on top of the same local queue.
 
-- not atomic
-- no optimistic locking
-- no `watch`
-- no rollback
+- Not atomic
+- No optimistic locking
+- No `watch`
+- No rollback
 
 Enable it explicitly:
 
 ```ts
 const redis = new Redis({
-  url: 'cfkv://token@worker.example.com/kv',
+  url: 'cfkv://token@worker.example.com',
   allowEmulatedCommands: true
 })
 
 const result = await redis.multi().set('a', '1').get('a').exec()
 ```
 
-## Included Worker
+## Examples
+
+```bash
+npm run build
+npm run example:ws
+npm run example:pubsub
+```
+
+The WebSocket example lives in `examples/node-websocket/` and shows the correct shutdown pattern with `await redis.quit()`.
+
+The pub/sub example lives in `examples/node-pubsub/`.
+
+## Worker Backend
 
 The repo includes a first-party Cloudflare Worker backend under `worker/`.
 
-- `worker/src/index.ts` is the Worker entrypoint
-- `worker/src/router.ts` uses `hono` to handle HTTP routes and auth middleware
-- `worker/src/ws.ts` handles WebSocket request/response messages
-- `worker/src/kv.ts` is the single source of truth for KV persistence and TTL metadata behavior
+- `worker/src/index.ts` is the Worker entrypoint.
+- `worker/src/router.ts` uses `hono` to handle HTTP routes and auth middleware.
+- `worker/src/ws.ts` handles WebSocket request/response messages.
+- `worker/src/kv.ts` is the single source of truth for KV persistence and TTL metadata behavior.
 
 The Worker stores value payloads and TTL metadata in separate KV keys so `ttl`, `pttl`, and `persist` behave consistently across HTTP and WS.
 
-### Local Worker development
-
-```bash
-cd worker
-npm install
-npm test
-npx wrangler dev
-```
-
-For a public template/deploy-button flow, `worker/wrangler.jsonc` is set up for automatic KV provisioning. Configure `AUTH_TOKEN` as a Worker secret if you want bearer-token protection.
-
-## Worker backend contract
+### Backend Contract
 
 The library expects a Worker or HTTP service that exposes operations like:
 
@@ -298,7 +284,16 @@ npm --prefix worker install
 npm --prefix worker test
 ```
 
-## Local End-To-End Tests
+### Local Worker Development
+
+```bash
+cd worker
+npm install
+npm test
+npx wrangler dev
+```
+
+### Local End-To-End Tests
 
 Run the real Worker locally with `wrangler dev` and exercise the real client over both HTTP and WebSocket:
 
@@ -308,11 +303,11 @@ npm run test:integration:local
 
 This suite:
 
-- starts the Worker from `worker/`
-- injects a local `AUTH_TOKEN=test`
-- tests supported client methods over HTTP
-- tests supported client methods over WebSocket
-- prints warm local latency samples
+- Starts the Worker from `worker/`.
+- Injects a local `AUTH_TOKEN=test`.
+- Tests supported client methods over HTTP.
+- Tests supported client methods over WebSocket.
+- Prints warm local latency samples.
 
 To print only the local latency benchmark output:
 
@@ -322,7 +317,7 @@ npm run bench:local
 
 Current illustrative deployed measurement from the live `workers.dev` test run:
 
-- warm HTTP `get` average: about `189ms`
-- warm WebSocket `get` average: about `112ms`
+- Warm HTTP `get` average: about `189ms`.
+- Warm WebSocket `get` average: about `112ms`.
 
 Treat these as directional numbers only; latency depends on region, Cloudflare account state, network path, and whether the test is local or deployed.

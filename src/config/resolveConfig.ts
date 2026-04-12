@@ -30,6 +30,23 @@ function resolveWebSocketFactory(override?: WebSocketFactory): WebSocketFactory 
   return (url: string) => new webSocketCtor(url)
 }
 
+function deriveWebSocketUrl(baseUrl: string): string {
+  const url = new URL(baseUrl)
+  url.protocol = url.protocol === 'http:' ? 'ws:' : 'wss:'
+
+  const basePath = url.pathname.replace(/\/$/, '')
+
+  if (!basePath || basePath === '/') {
+    url.pathname = '/ws'
+  } else if (basePath.endsWith('/ws')) {
+    url.pathname = basePath
+  } else {
+    url.pathname = `${basePath}/ws`
+  }
+
+  return url.toString()
+}
+
 export function resolveConfig(input?: string | RedisOptions): ResolvedConfig {
   const envConfig = readEnvConfig()
   const constructorOptions: RedisOptions = typeof input === 'string' ? { url: input } : input ?? {}
@@ -57,7 +74,7 @@ export function resolveConfig(input?: string | RedisOptions): ResolvedConfig {
 
   const timeoutMs = constructorOptions.timeoutMs ?? parsedUrl?.timeoutMs ?? envConfig.timeoutMs ?? DEFAULT_TIMEOUT_MS
   const transport = constructorOptions.transport ?? envConfig.transport ?? 'http'
-  const wsUrl = constructorOptions.wsUrl ?? envConfig.wsUrl
+  const wsUrl = constructorOptions.wsUrl ?? envConfig.wsUrl ?? deriveWebSocketUrl(finalBaseUrl)
 
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
     throw new ConfigError('`timeoutMs` must be a positive integer')
@@ -65,10 +82,6 @@ export function resolveConfig(input?: string | RedisOptions): ResolvedConfig {
 
   if (transport !== 'http' && transport !== 'ws') {
     throw new ConfigError('`transport` must be either `http` or `ws`')
-  }
-
-  if (transport === 'ws' && !wsUrl) {
-    throw new ConfigError('Missing WebSocket URL. Set `CLOUDFLARE_KV_WS_URL` or pass `wsUrl` when `transport` is `ws`')
   }
 
   const webSocketFactory = resolveWebSocketFactory(constructorOptions.webSocketFactory)

@@ -7,7 +7,6 @@ import { fileURLToPath } from 'node:url'
 
 export interface LocalWorkerHandle {
   httpUrl: string
-  wsUrl: string
   token: string
   stop: () => Promise<void>
 }
@@ -98,7 +97,6 @@ export async function startLocalWorker(): Promise<LocalWorkerHandle> {
 
   return {
     httpUrl: `cfkv://${TOKEN}@${HOST}:${port}`,
-    wsUrl: `ws://${HOST}:${port}/ws`,
     token: TOKEN,
     stop: teardown
   }

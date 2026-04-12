@@ -55,13 +55,12 @@ describe('websocket transport', () => {
     const redis = new Redis({
       url: 'cfkv://token@worker.example.com/root',
       transport: 'ws',
-      wsUrl: 'wss://worker.example.com/root/ws',
       webSocketFactory,
       fetch: vi.fn() as unknown as typeof fetch
     })
 
     await expect(redis.get('socket:key')).resolves.toBe('ws-value')
-    expect(webSocketFactory).toHaveBeenCalledTimes(1)
+    expect(webSocketFactory).toHaveBeenCalledWith('wss://worker.example.com/root/ws?token=token')
   })
 
   it('closes websocket transport on quit', async () => {
@@ -70,7 +69,6 @@ describe('websocket transport', () => {
     const redis = new Redis({
       url: 'cfkv://token@worker.example.com/root',
       transport: 'ws',
-      wsUrl: 'wss://worker.example.com/root/ws',
       webSocketFactory: () => {
         socketRef = new FakeWebSocket((raw, socket) => {
           const message = JSON.parse(raw) as { id: string; action: string }
@@ -112,7 +110,6 @@ describe('websocket transport', () => {
 
     const redis = new Redis({
       url: 'cfkv://token@worker.example.com/root',
-      wsUrl: 'wss://worker.example.com/root/ws',
       webSocketFactory: (url: string) => new FakeWebSocket((raw, socket) => {
         const frame = JSON.parse(raw) as { type: string; channel?: string; message?: string }
         const channel = new URL(url).searchParams.get('channel') as string
@@ -156,7 +153,6 @@ describe('websocket transport', () => {
 
     const redis = new Redis({
       url: 'cfkv://token@worker.example.com/root',
-      wsUrl: 'wss://worker.example.com/root/ws',
       fetch,
       webSocketFactory: vi.fn()
     })

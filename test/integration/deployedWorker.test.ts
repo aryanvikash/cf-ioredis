@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { Redis } from '../../src'
 
 const httpUrl = process.env.CF_REDIS_KV_TEST_URL ?? 'cfkv://test@cf-redis-kv-worker-private.aryanvikash.workers.dev'
-const wsUrl = process.env.CF_REDIS_KV_TEST_WS_URL ?? 'wss://cf-redis-kv-worker-private.aryanvikash.workers.dev/ws'
+const wsUrl = process.env.CF_REDIS_KV_TEST_WS_URL
 const runWsIntegration = process.env.CF_REDIS_KV_RUN_WS_INTEGRATION === 'true'
 const prefix = `integration:${Date.now()}:${Math.random().toString(36).slice(2)}:`
 
@@ -39,7 +39,7 @@ describe.sequential('deployed worker integration', () => {
       wsRedis = new Redis({
         url: httpUrl,
         transport: 'ws',
-        wsUrl,
+        ...(wsUrl ? { wsUrl } : {}),
         allowEmulatedCommands: true,
         timeoutMs: 60000
       })
@@ -150,7 +150,7 @@ describe.sequential('deployed worker websocket integration', () => {
     wsRedis = new Redis({
       url: httpUrl,
       transport: 'ws',
-      wsUrl,
+      ...(wsUrl ? { wsUrl } : {}),
       allowEmulatedCommands: true,
       timeoutMs: 60000
     })

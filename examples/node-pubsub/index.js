@@ -2,12 +2,10 @@ const { Redis } = require("../../dist/index.cjs");
 
 const publisher = new Redis({
   url: "cfkv://test@cf-redis-kv-worker.aryanvikash.workers.dev",
-  wsUrl: "wss://cf-redis-kv-worker.aryanvikash.workers.dev/ws",
 });
 
 const subscriber = new Redis({
   url: "cfkv://test@cf-redis-kv-worker.aryanvikash.workers.dev",
-  wsUrl: "wss://cf-redis-kv-worker.aryanvikash.workers.dev/ws",
 });
 
 const channel = "example:pubsub:updates";

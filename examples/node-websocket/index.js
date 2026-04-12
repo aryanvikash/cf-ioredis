@@ -3,7 +3,6 @@ const { Redis } = require("../../dist/index.cjs");
 const redis = new Redis({
   url: "cfkv://test@cf-redis-kv-worker.aryanvikash.workers.dev",
   transport: "ws",
-  wsUrl: "wss://cf-redis-kv-worker.aryanvikash.workers.dev/ws",
 });
 
 async function main() {
