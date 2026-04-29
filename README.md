@@ -2,9 +2,16 @@
 
 [![Package CI/CD](https://github.com/aryanvikash/cf-ioredis/actions/workflows/package.yml/badge.svg?branch=main)](https://github.com/aryanvikash/cf-ioredis/actions/workflows/package.yml)
 
-`cf-ioredis` lets Node.js, servers, CLIs, and other non-Cloudflare runtimes use Cloudflare KV through an `ioredis`-style API. It connects to a companion Cloudflare Worker over HTTP or WebSocket.
+`cf-ioredis` lets Node.js apps, servers, CLIs, and other non-Cloudflare runtimes use a Redis-shaped API backed by a Cloudflare Worker + Durable Object stack. It connects over HTTP or WebSocket and gives you atomic strings, TTL keys, and live pub/sub on Cloudflare's free tier.
 
-This library is built for code running outside Cloudflare Workers, where KV bindings are not directly available. It is not a real Redis transport; it is a Redis-shaped client for the subset of operations that can map cleanly to a Worker-backed Cloudflare KV service.
+This is **not real Redis**. It is a Redis-shaped client for the subset of operations that map cleanly onto a single SQLite-backed Durable Object.
+
+## Why use it
+
+- **Free tier friendly.** Storage is SQLite inside a Durable Object, billed in cheap row reads/writes — not KV operations.
+- **Truly atomic.** A DO is single-threaded, so `incr`, `decr`, `getset`, and `SET NX/XX` are race-free without locks.
+- **Cheap pub/sub.** Subscribers connect over WebSocket Hibernation, so idle subscribers don't bill duration. Channels live in memory inside the DO — no per-channel DO sprawl.
+- **No infrastructure to run.** One-click deploy a Worker; no Redis instance, no Upstash, no provider lock-in beyond Cloudflare.
 
 ## Install
 
@@ -12,102 +19,85 @@ This library is built for code running outside Cloudflare Workers, where KV bind
 npm install cf-ioredis
 ```
 
-## Deploy Worker
+## Deploy the Worker backend
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/aryanvikash/cf-redis-kv-worker)
 
-Use this button to deploy the companion Cloudflare Worker to your own account before pointing the client at its HTTP or WebSocket URL.
-
-For a public template/deploy-button flow, `worker/wrangler.jsonc` is set up for automatic KV provisioning. Configure `AUTH_TOKEN` as a Worker secret if you want bearer-token protection.
+Click to deploy the companion Worker into your own account, then point the client at its URL. The Worker provisions a single SQLite-backed `NamespaceDO` and accepts an optional `AUTH_TOKEN` secret for bearer-token auth.
 
 ## Configuration
 
-Configuration is resolved in this order:
+Configuration is resolved in this order: constructor URL → constructor options → environment variables → defaults.
 
-1. Constructor URL
-2. Constructor options
-3. Environment variables
-4. Defaults
+### URL format
 
-### Environment Variables
-
-| Variable                   | Description                                       |
-| -------------------------- | ------------------------------------------------- |
-| `CLOUDFLARE_KV_URL`        | Worker URL in `cfkv://` or `redis+cfkv://` format |
-| `CLOUDFLARE_KV_TOKEN`      | Bearer token for the Worker                       |
-| `CLOUDFLARE_KV_TIMEOUT_MS` | Request timeout in milliseconds                   |
-| `CLOUDFLARE_KV_KEY_PREFIX` | Prefix applied to keys before requests are sent   |
-| `CLOUDFLARE_KV_TRANSPORT`  | Transport mode: `http` or `ws`                    |
-| `CLOUDFLARE_KV_WS_URL`     | Optional WebSocket URL override for custom routes |
-
-### URL Format
-
-Use `cfkv://` or `redis+cfkv://`.
+Use `cfkv://` (or the alias `redis+cfkv://`):
 
 ```text
-cfkv://token@worker.example.com?timeoutMs=5000&keyPrefix=app:
+cfkv://token@worker.example.com?keyPrefix=app:&namespace=tenant-a&timeoutMs=2000
 ```
 
 The URL is converted to an HTTPS Worker base URL internally.
 
-The client appends Worker routes such as `/get`, `/set`, `/ws`, and `/pubsub/ws` under the hood. When `transport: 'ws'` or pub/sub opens a WebSocket, the WebSocket URL is derived from the same Worker URL. Use `wsUrl` or `CLOUDFLARE_KV_WS_URL` only to override that default.
+### Environment variables
+
+| Variable                   | Description                                                                                                                   |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `CLOUDFLARE_KV_URL`        | Worker URL in `cfkv://` or `redis+cfkv://` form                                                                               |
+| `CLOUDFLARE_KV_TOKEN`      | Bearer token for the Worker                                                                                                   |
+| `CLOUDFLARE_KV_TIMEOUT_MS` | Per-request timeout in milliseconds (default 5000)                                                                            |
+| `CLOUDFLARE_KV_KEY_PREFIX` | Prefix applied to keys before they leave the client                                                                           |
+| `CLOUDFLARE_KV_NAMESPACE`  | Routes traffic to a specific Durable Object namespace (multi-tenant isolation)                                                |
+| `CLOUDFLARE_KV_TRANSPORT`  | `http` or `ws`. Defaults to `ws` when a global `WebSocket` is available (Node 22+, browsers, edge runtimes), otherwise `http` |
+| `CLOUDFLARE_KV_WS_URL`     | Custom WebSocket URL override                                                                                                 |
+
+### Options
+
+```ts
+import { Redis } from 'cf-ioredis'
+
+const redis = new Redis({
+  url: 'cfkv://token@worker.example.com',
+  transport: 'ws', // default
+  timeoutMs: 3000,
+  keyPrefix: 'app:',
+  namespace: 'tenant-a' // optional: isolate this client to its own DO
+})
+```
+
+The transport defaults to **`ws`** when a global `WebSocket` is available (Node 22+, browsers, Cloudflare Workers, Deno), and falls back to **`http`** when it isn't (Node 18 / 20 without polyfill). On older Node versions you can opt into `ws` by passing your own `webSocketFactory`, e.g. `import WebSocket from 'ws'` and `webSocketFactory: (url) => new WebSocket(url)`.
 
 ## Usage
 
-### Read From Environment
+### Strings + counters
 
 ```ts
-import { Redis } from 'cf-ioredis'
-
-const redis = new Redis()
-const value = await redis.get('user:1')
-```
-
-### Use a Connection URL
-
-```ts
-import { Redis } from 'cf-ioredis'
-
-const redis = new Redis('cfkv://token@worker.example.com?keyPrefix=demo:')
 await redis.set('user:1', 'alice')
+await redis.set('user:1', 'bob', { nx: true }) // returns null — already exists
+
+await redis.incr('hits') // 1 — atomic
+await redis.incr('hits') // 2
+await redis.incrby('hits', 10) // 12
+
+await redis.getset('user:1', 'carol') // returns 'alice', stores 'carol'
 ```
 
-### Use Options
+### TTL
 
 ```ts
-import { Redis } from 'cf-ioredis'
-
-const redis = new Redis({
-  url: 'cfkv://token@worker.example.com',
-  timeoutMs: 3000,
-  keyPrefix: 'app:'
-})
+await redis.set('session:42', 'data')
+await redis.expire('session:42', 60) // 60 seconds
+await redis.ttl('session:42') // 60
+await redis.persist('session:42') // remove TTL
 ```
 
-### Use WebSocket Transport
-
-```ts
-import { Redis } from 'cf-ioredis'
-
-const redis = new Redis({
-  url: 'cfkv://token@worker.example.com',
-  transport: 'ws',
-  allowEmulatedCommands: true
-})
-```
+Expired keys are cleaned up by a Durable Object alarm — no zombie data.
 
 ### Pub/Sub
 
 ```ts
-import { Redis } from 'cf-ioredis'
-
-const publisher = new Redis({
-  url: 'cfkv://token@worker.example.com'
-})
-
-const subscriber = new Redis({
-  url: 'cfkv://token@worker.example.com'
-})
+const subscriber = new Redis({ url: 'cfkv://token@worker.example.com' })
+const publisher = new Redis({ url: 'cfkv://token@worker.example.com' })
 
 subscriber.on('message', (channel, message) => {
   console.log(channel, message)
@@ -119,207 +109,119 @@ await subscriber.unsubscribe('updates')
 await Promise.all([publisher.quit(), subscriber.quit()])
 ```
 
-Pub/sub behavior:
+Pub/sub uses a dedicated WebSocket connection per subscriber. Channel state lives in the Durable Object's in-memory map; there is one DO per `namespace`, not per channel.
 
-- `subscribe` and `unsubscribe` use a dedicated WebSocket pub/sub connection.
-- `publish` prefers WebSocket when there is an active pub/sub socket for that channel.
-- `publish` falls back to HTTP `POST /publish` when no active pub/sub socket is available.
-- v1 supports exact channel names only, with live delivery only.
-
-## API Support
-
-The current surface focuses on string and key operations.
-
-| Method        | Status    | Caveat                                                   |
-| ------------- | --------- | -------------------------------------------------------- | ----- |
-| `get`         | supported | returns `string                                          | null` |
-| `set`         | supported | returns `"OK"` or `null` for rejected conditional writes |
-| `del`         | supported | integer reply                                            |
-| `exists`      | supported | integer reply                                            |
-| `mget`        | supported | ordered array of values                                  |
-| `mset`        | supported | object-based input in v1                                 |
-| `expire`      | supported | seconds mapped to Worker TTL ms                          |
-| `pexpire`     | supported | millisecond TTL                                          |
-| `ttl`         | supported | derived from Worker ms TTL                               |
-| `pttl`        | supported | raw ms TTL                                               |
-| `persist`     | supported | removes TTL if Worker supports it                        |
-| `type`        | supported | returns `string` or `none`                               |
-| `pipeline`    | supported | local queued batch executor                              |
-| `multi`       | emulated  | requires `allowEmulatedCommands: true`, not atomic       |
-| `publish`     | supported | uses pub/sub WS when active, otherwise HTTP fallback     |
-| `subscribe`   | supported | exact channel names only, requires WebSocket support     |
-| `unsubscribe` | supported | exact channel names only, requires WebSocket support     |
-| `quit`        | supported | returns `"OK"`                                           |
-| `disconnect`  | supported | no-op compatibility method                               |
-
-### Unsupported API Families
-
-- Hashes
-- Lists
-- Sets
-- Sorted sets
-- Streams
-- Scripting
-- Watch/unwatch
-- Cluster, sentinel, and server commands
-
-Unsupported methods should throw `UnsupportedCommandError`.
-
-## Command Semantics
-
-### Pipeline
-
-`pipeline()` queues commands locally and executes them in order.
+### Pipelines and emulated MULTI
 
 ```ts
-const result = await redis.pipeline().get('a').set('a', '2').del('a').exec()
+const result = await redis.pipeline().get('a').set('a', '2').incr('counter').exec()
+// [ [null, '1'], [null, 'OK'], [null, 5] ]
 ```
 
-Result format matches common `ioredis` tuple style:
+`multi()` is an alias for `pipeline()` — it executes commands in order but is **not** a Redis transaction. The DO already serializes individual commands, so atomicity per command is real; cross-command atomicity is not.
 
-```ts
-;[
-  [null, '1'],
-  [null, 'OK'],
-  [null, 1]
-]
+## API support
+
+| Method                      | Status    | Notes                                                              |
+| --------------------------- | --------- | ------------------------------------------------------------------ |
+| `get`                       | supported | `string \| null`                                                   |
+| `set`                       | supported | `'OK' \| null` (null when NX/XX rejects)                           |
+| `getset`                    | supported | atomic — returns previous value                                    |
+| `mget`                      | supported | ordered array                                                      |
+| `mset`                      | supported | object input                                                       |
+| `incr` / `decr`             | supported | atomic, integer reply                                              |
+| `incrby` / `decrby`         | supported | atomic, integer reply                                              |
+| `del`                       | supported | integer reply                                                      |
+| `exists`                    | supported | integer reply                                                      |
+| `expire` / `pexpire`        | supported | seconds / milliseconds                                             |
+| `ttl` / `pttl`              | supported | `-1` no expiry, `-2` missing key                                   |
+| `persist`                   | supported | removes TTL                                                        |
+| `type`                      | supported | `'string' \| 'none'`                                               |
+| `pipeline`                  | supported | local queued batch                                                 |
+| `multi`                     | emulated  | requires `allowEmulatedCommands: true`, not atomic across commands |
+| `publish`                   | supported | uses pub/sub WS when active, else HTTP                             |
+| `subscribe` / `unsubscribe` | supported | exact channel names only                                           |
+| `quit` / `disconnect`       | supported | closes transports + sockets                                        |
+
+### Not supported
+
+Hashes, lists, sets, sorted sets, streams, scripting (`EVAL`), `WATCH`/`UNWATCH`, cluster/sentinel, server commands. Calling them throws `UnsupportedCommandError`.
+
+## How it works
+
+```
+┌──────────┐ HTTP/WS  ┌──────────┐ stub.fetch  ┌──────────────────┐
+│  Client  │─────────►│  Worker  │────────────►│   NamespaceDO    │
+│cf-ioredis│          │ (router) │             │ SQLite + WS hib. │
+└──────────┘          └──────────┘             └──────────────────┘
 ```
 
-This is not Redis wire pipelining.
+- **Worker** authenticates the request and forwards it to a `NamespaceDO` instance keyed by namespace name.
+- **NamespaceDO** holds:
+  - SQLite table `kv(key, value, expires_at)` for persistent storage
+  - in-memory `Map<channel, Set<WebSocket>>` for pub/sub fanout
+  - hibernating WebSockets so idle subscribers don't bill duration
+  - alarms for TTL cleanup
 
-### Transactions
+### Wire protocol
 
-`multi()` is an emulated transaction-shaped wrapper on top of the same local queue.
+Both HTTP and WebSocket use the same RPC envelope:
 
-- Not atomic
-- No optimistic locking
-- No `watch`
-- No rollback
-
-Enable it explicitly:
-
-```ts
-const redis = new Redis({
-  url: 'cfkv://token@worker.example.com',
-  allowEmulatedCommands: true
-})
-
-const result = await redis.multi().set('a', '1').get('a').exec()
-```
-
-## Examples
-
-```bash
-npm run build
-npm run example:ws
-npm run example:pubsub
-```
-
-The WebSocket example lives in `examples/node-websocket/` and shows the correct shutdown pattern with `await redis.quit()`.
-
-The pub/sub example lives in `examples/node-pubsub/`.
-
-## Worker Backend
-
-The repo includes a first-party Cloudflare Worker backend under `worker/`.
-
-- `worker/src/index.ts` is the Worker entrypoint.
-- `worker/src/router.ts` uses `hono` to handle HTTP routes and auth middleware.
-- `worker/src/ws.ts` handles WebSocket request/response messages.
-- `worker/src/kv.ts` is the single source of truth for KV persistence and TTL metadata behavior.
-
-The Worker stores value payloads and TTL metadata in separate KV keys so `ttl`, `pttl`, and `persist` behave consistently across HTTP and WS.
-
-### Backend Contract
-
-The library expects a Worker or HTTP service that exposes operations like:
-
-- `GET /get?key=...`
-- `POST /set`
-- `POST /mget`
-- `POST /mset`
-- `DELETE /delete`
-- `POST /exists`
-- `POST /expire`
-- `GET /ttl?key=...`
-- `POST /persist`
-- `GET /type?key=...`
-- `POST /publish`
-- `GET /ws` for WebSocket upgrade
-- `GET /pubsub/ws?channel=...` for pub/sub WebSocket upgrade
-
-Payloads are JSON and values are encoded into a small envelope so future non-string types can be introduced without changing storage format.
-
-WebSocket messages use the same action model as the transport layer:
+**Request**
 
 ```json
 {
-  "id": "1",
-  "action": "get",
-  "payload": {
-    "key": "user:1"
-  }
+  "id": "req-1",
+  "action": "set",
+  "payload": { "key": "user:1", "value": { "type": "string", "encoding": "utf8", "value": "alice" } }
 }
 ```
 
-Responses are correlated by `id` and return either `data` or a typed error payload.
-
-Pub/sub uses a separate WebSocket protocol with frames like:
+**Response**
 
 ```json
-{ "type": "subscribe", "channels": ["updates"] }
+{ "id": "req-1", "ok": true, "data": { "ok": true, "applied": true, "previous": null } }
 ```
 
-and message deliveries like:
+- HTTP transport: `POST /rpc` with the envelope as body.
+- WebSocket transport: same envelope multiplexed over `/ws`, correlated by `id`.
 
-```json
-{ "type": "message", "channel": "updates", "message": "hello" }
-```
+Pub/sub uses a separate frame protocol on `/pubsub/ws?channel=...`.
+
+### Multi-tenant routing
+
+The `namespace` option (or `?ns=` URL param, or `CLOUDFLARE_KV_NAMESPACE` env var) selects which Durable Object instance handles the request. Different namespaces are completely isolated SQLite stores.
 
 ## Development
 
 ```bash
 npm install
-npm test
-npm run build
-npm --prefix worker install
-npm --prefix worker test
+npm test                  # unit tests
+npm run build             # tsup → dist/
+npm run format            # prettier
+npm --prefix ../worker install
+npm --prefix ../worker test
 ```
 
-### Local Worker Development
+### Local end-to-end tests
 
-```bash
-cd worker
-npm install
-npm test
-npx wrangler dev
-```
-
-### Local End-To-End Tests
-
-Run the real Worker locally with `wrangler dev` and exercise the real client over both HTTP and WebSocket:
+Run the real Worker locally with `wrangler dev` and exercise the client over both HTTP and WebSocket:
 
 ```bash
 npm run test:integration:local
 ```
 
-This suite:
-
-- Starts the Worker from `worker/`.
-- Injects a local `AUTH_TOKEN=test`.
-- Tests supported client methods over HTTP.
-- Tests supported client methods over WebSocket.
-- Prints warm local latency samples.
-
-To print only the local latency benchmark output:
+To benchmark warm latency only:
 
 ```bash
 npm run bench:local
 ```
 
-Current illustrative deployed measurement from the live `workers.dev` test run:
+## Trade-offs vs real Redis
 
-- Warm HTTP `get` average: about `189ms`.
-- Warm WebSocket `get` average: about `112ms`.
+- **Regional, not global.** A Durable Object lives in one region. KV is globally cached but eventually consistent; the DO is consistent but regional.
+- **Per-DO throughput cap.** ~1k requests/second per DO. For higher scale, shard by namespace.
+- **String type only.** No hashes, lists, sets, sorted sets, or streams.
+- **No `WATCH` / optimistic locking.** Use `incr`, `getset`, or `SET NX` for atomicity.
 
-Treat these as directional numbers only; latency depends on region, Cloudflare account state, network path, and whether the test is local or deployed.
+For most hobby and small-SaaS workloads on Cloudflare's free tier, these limits are not binding.

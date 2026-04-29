@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { parseConnectionUrl, resolveConfig } from '../../src/config'
 import { ConfigError } from '../../src/errors'
 
@@ -55,9 +55,36 @@ describe('resolveConfig', () => {
     expect(config.timeoutMs).toBe(9000)
   })
 
-  it('defaults to ws transport', () => {
-    const config = resolveConfig('cfkv://worker.example.com')
+  it('defaults to ws when a WebSocket factory is available', () => {
+    const config = resolveConfig({
+      url: 'cfkv://worker.example.com',
+      webSocketFactory: () => ({}) as never
+    })
     expect(config.transport).toBe('ws')
+  })
+
+  describe('with no global WebSocket', () => {
+    let originalWs: unknown
+
+    beforeEach(() => {
+      originalWs = (globalThis as { WebSocket?: unknown }).WebSocket
+      vi.stubGlobal('WebSocket', undefined)
+    })
+
+    afterEach(() => {
+      vi.stubGlobal('WebSocket', originalWs)
+    })
+
+    it('falls back to http transport instead of throwing', () => {
+      const config = resolveConfig('cfkv://worker.example.com')
+      expect(config.transport).toBe('http')
+    })
+
+    it('throws if ws transport is explicitly requested', () => {
+      expect(() => resolveConfig({ url: 'cfkv://worker.example.com', transport: 'ws' })).toThrowError(
+        /webSocketFactory/
+      )
+    })
   })
 
   it('derives a ws URL from baseUrl when not set', () => {

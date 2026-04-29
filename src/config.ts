@@ -2,7 +2,6 @@ import { ConfigError } from './errors'
 import type { RedisOptions, ResolvedConfig, TransportMode, WebSocketFactory, WebSocketLike } from './types'
 
 const DEFAULT_TIMEOUT_MS = 5000
-const DEFAULT_TRANSPORT: TransportMode = 'ws'
 
 const ENV_KEYS = {
   url: 'CLOUDFLARE_KV_URL',
@@ -35,12 +34,17 @@ export function resolveConfig(input?: string | RedisOptions): ResolvedConfig {
 
   const fromUrl = parseConnectionUrl(url)
   const timeoutMs = pickInt(opts.timeoutMs, fromUrl.timeoutMs, env.timeoutMs, DEFAULT_TIMEOUT_MS)
-  const transport = pickTransport(opts.transport, env.transport)
   const wsUrl = opts.wsUrl ?? env.wsUrl ?? deriveWsUrl(fromUrl.baseUrl)
   const webSocketFactory = opts.webSocketFactory ?? defaultWsFactory()
 
+  // Smart default: prefer ws (cheaper, fewer Worker requests) when a factory is available,
+  // otherwise fall back to http so older Node versions without global WebSocket still work.
+  const transport = pickTransport(opts.transport, env.transport, webSocketFactory ? 'ws' : 'http')
+
   if (transport === 'ws' && !webSocketFactory) {
-    throw new ConfigError('Global WebSocket is not available; provide a `webSocketFactory` in Redis options')
+    throw new ConfigError(
+      'WebSocket transport requested but global WebSocket is unavailable; provide `webSocketFactory` in Redis options'
+    )
   }
 
   return {
@@ -132,7 +136,7 @@ function pickTransport(...values: Array<TransportMode | undefined>): TransportMo
     if (v === 'http' || v === 'ws') return v
     if (v !== undefined) throw new ConfigError('`transport` must be either `http` or `ws`')
   }
-  return DEFAULT_TRANSPORT
+  return 'http'
 }
 
 function parseIntOrUndef(input: string | null | undefined): number | undefined {
