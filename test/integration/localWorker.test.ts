@@ -86,11 +86,17 @@ describe.sequential('local worker end-to-end', () => {
     await expect(httpRedis.exists(scoped('string'))).resolves.toBe(1)
     await expect(httpRedis.type(scoped('string'))).resolves.toBe('string')
 
-    await expect(httpRedis.mset({
-      [scoped('mset:one')]: 'one',
-      [scoped('mset:two')]: 'two'
-    })).resolves.toBe('OK')
-    await expect(httpRedis.mget(scoped('mset:one'), scoped('mset:two'), scoped('missing'))).resolves.toEqual(['one', 'two', null])
+    await expect(
+      httpRedis.mset({
+        [scoped('mset:one')]: 'one',
+        [scoped('mset:two')]: 'two'
+      })
+    ).resolves.toBe('OK')
+    await expect(httpRedis.mget(scoped('mset:one'), scoped('mset:two'), scoped('missing'))).resolves.toEqual([
+      'one',
+      'two',
+      null
+    ])
 
     await httpRedis.set(scoped('expire'), 'expire-me')
     await expect(httpRedis.expire(scoped('expire'), 10)).resolves.toBe(1)
@@ -109,7 +115,8 @@ describe.sequential('local worker end-to-end', () => {
     await expect(httpRedis.persist(scoped('persist'))).resolves.toBe(1)
     await expect(httpRedis.ttl(scoped('persist'))).resolves.toBe(-1)
 
-    const pipelineResult = await httpRedis.pipeline()
+    const pipelineResult = await httpRedis
+      .pipeline()
       .set(scoped('pipeline'), 'pipe')
       .get(scoped('pipeline'))
       .exists(scoped('pipeline'))
@@ -120,7 +127,8 @@ describe.sequential('local worker end-to-end', () => {
       [null, 1]
     ])
 
-    const multiResult = await httpRedis.multi()
+    const multiResult = await httpRedis
+      .multi()
       .set(scoped('multi'), 'multi-value')
       .get(scoped('multi'))
       .exec()
@@ -143,7 +151,8 @@ describe.sequential('local worker end-to-end', () => {
     await expect(wsRedis.get(scoped('ws:string'))).resolves.toBe('ws-hello')
     await expect(wsRedis.exists(scoped('ws:string'))).resolves.toBe(1)
 
-    const pipelineResult = await wsRedis.pipeline()
+    const pipelineResult = await wsRedis
+      .pipeline()
       .set(scoped('ws:pipeline'), 'pipe-ws')
       .get(scoped('ws:pipeline'))
       .exec()
@@ -152,7 +161,9 @@ describe.sequential('local worker end-to-end', () => {
       [null, 'pipe-ws']
     ])
 
-    await expect(wsRedis.multi().set(scoped('multi'), 'ws-multi').get(scoped('multi')).exec()).resolves.toEqual([
+    await expect(
+      wsRedis.multi().set(scoped('multi'), 'ws-multi').get(scoped('multi')).exec()
+    ).resolves.toEqual([
       [null, 'OK'],
       [null, 'ws-multi']
     ])
@@ -208,13 +219,13 @@ describe.sequential('local worker end-to-end', () => {
     await expect(subscriberTwo.unsubscribe(channel)).resolves.toBe(0)
     await expect(httpRedis.publish(channel, 'only-one')).resolves.toBe(1)
     await waitFor(() => receivedOne.length === 2)
-    expect(receivedOne).toEqual([[channel, 'hello-pubsub'], [channel, 'only-one']])
+    expect(receivedOne).toEqual([
+      [channel, 'hello-pubsub'],
+      [channel, 'only-one']
+    ])
     expect(receivedTwo).toEqual([[channel, 'hello-pubsub']])
 
-    await Promise.allSettled([
-      pubSubRedis.unsubscribe(channel),
-      subscriberTwo.quit()
-    ])
+    await Promise.allSettled([pubSubRedis.unsubscribe(channel), subscriberTwo.quit()])
   }, 60000)
 })
 

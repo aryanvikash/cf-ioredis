@@ -1,7 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { Redis } from '../../src'
 
-const httpUrl = process.env.CF_REDIS_KV_TEST_URL ?? 'cfkv://test@cf-redis-kv-worker-private.aryanvikash.workers.dev'
+const httpUrl =
+  process.env.CF_REDIS_KV_TEST_URL ?? 'cfkv://test@cf-redis-kv-worker-private.aryanvikash.workers.dev'
 const wsUrl = process.env.CF_REDIS_KV_TEST_WS_URL
 const runWsIntegration = process.env.CF_REDIS_KV_RUN_WS_INTEGRATION === 'true'
 const prefix = `integration:${Date.now()}:${Math.random().toString(36).slice(2)}:`
@@ -77,11 +78,17 @@ describe.sequential('deployed worker integration', () => {
     await expect(httpRedis.exists(scoped('string'))).resolves.toBe(1)
     await expect(httpRedis.type(scoped('string'))).resolves.toBe('string')
 
-    await expect(httpRedis.mset({
-      [scoped('mset:one')]: 'one',
-      [scoped('mset:two')]: 'two'
-    })).resolves.toBe('OK')
-    await expect(httpRedis.mget(scoped('mset:one'), scoped('mset:two'), scoped('missing'))).resolves.toEqual(['one', 'two', null])
+    await expect(
+      httpRedis.mset({
+        [scoped('mset:one')]: 'one',
+        [scoped('mset:two')]: 'two'
+      })
+    ).resolves.toBe('OK')
+    await expect(httpRedis.mget(scoped('mset:one'), scoped('mset:two'), scoped('missing'))).resolves.toEqual([
+      'one',
+      'two',
+      null
+    ])
 
     await httpRedis.set(scoped('expire'), 'expire-me')
     await expect(httpRedis.expire(scoped('expire'), 10)).resolves.toBe(1)
@@ -100,7 +107,8 @@ describe.sequential('deployed worker integration', () => {
     await expect(httpRedis.persist(scoped('persist'))).resolves.toBe(1)
     await expect(httpRedis.ttl(scoped('persist'))).resolves.toBe(-1)
 
-    const pipelineResult = await httpRedis.pipeline()
+    const pipelineResult = await httpRedis
+      .pipeline()
       .set(scoped('pipeline'), 'pipe')
       .get(scoped('pipeline'))
       .exists(scoped('pipeline'))
@@ -111,7 +119,8 @@ describe.sequential('deployed worker integration', () => {
       [null, 1]
     ])
 
-    const multiResult = await httpRedis.multi()
+    const multiResult = await httpRedis
+      .multi()
       .set(scoped('multi'), 'multi-value')
       .get(scoped('multi'))
       .exec()
@@ -163,25 +172,30 @@ describe.sequential('deployed worker websocket integration', () => {
     ])
   })
 
-  itIfWs('covers websocket transport and measures latency', async () => {
-    await expect(wsRedis.set(scoped('string'), 'ws-hello')).resolves.toBe('OK')
-    await expect(wsRedis.get(scoped('string'))).resolves.toBe('ws-hello')
-    await expect(wsRedis.exists(scoped('string'))).resolves.toBe(1)
+  itIfWs(
+    'covers websocket transport and measures latency',
+    async () => {
+      await expect(wsRedis.set(scoped('string'), 'ws-hello')).resolves.toBe('OK')
+      await expect(wsRedis.get(scoped('string'))).resolves.toBe('ws-hello')
+      await expect(wsRedis.exists(scoped('string'))).resolves.toBe(1)
 
-    const wsPipeline = await wsRedis.pipeline()
-      .set(scoped('pipeline'), 'ws-pipe')
-      .get(scoped('pipeline'))
-      .exec()
-    expect(wsPipeline).toEqual([
-      [null, 'OK'],
-      [null, 'ws-pipe']
-    ])
+      const wsPipeline = await wsRedis
+        .pipeline()
+        .set(scoped('pipeline'), 'ws-pipe')
+        .get(scoped('pipeline'))
+        .exec()
+      expect(wsPipeline).toEqual([
+        [null, 'OK'],
+        [null, 'ws-pipe']
+      ])
 
-    await wsRedis.set(scoped('latency:ws'), 'latency-ws')
-    const wsLatency = await averageLatency('WS get', async () => {
-      await wsRedis.get(scoped('latency:ws'))
-    })
+      await wsRedis.set(scoped('latency:ws'), 'latency-ws')
+      const wsLatency = await averageLatency('WS get', async () => {
+        await wsRedis.get(scoped('latency:ws'))
+      })
 
-    expect(wsLatency).toBeGreaterThan(0)
-  }, 60000)
+      expect(wsLatency).toBeGreaterThan(0)
+    },
+    60000
+  )
 })

@@ -1,10 +1,28 @@
-export { Redis } from './client/Redis'
-export { Pipeline } from './client/Pipeline'
-export { Transaction } from './client/Transaction'
+export { Redis } from './Redis'
+export { Pipeline } from './Pipeline'
+export { PubSub } from './PubSub'
 
-export type { RedisOptions, ResolvedConfig, TransportMode, WebSocketFactory, WebSocketLike } from './types/config'
-export type { RedisValue, SetOptions, ExecTuple, CommandMetadata, RedisEventMap, RedisEventName, RedisEventListener } from './types/commands'
-export type { StatusReply, BulkStringReply, IntegerReply, ExecReply } from './types/responses'
+export { commandRegistry } from './commands'
+export { resolveConfig, parseConnectionUrl } from './config'
 
-export { RedisKvError, ConfigError, TransportError, UnsupportedCommandError } from './core/errors'
-export { commandRegistry } from './commands/registry'
+export { RedisKvError, ConfigError, TransportError, UnsupportedCommandError } from './errors'
+
+export type {
+  RedisOptions,
+  ResolvedConfig,
+  RedisValue,
+  RedisKey,
+  SetOptions,
+  TransportMode,
+  WebSocketFactory,
+  WebSocketLike,
+  CommandMetadata,
+  StatusReply,
+  BulkStringReply,
+  IntegerReply,
+  ExecReply,
+  ExecTuple,
+  RedisEventMap,
+  RedisEventName,
+  RedisEventListener
+} from './types'

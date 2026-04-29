@@ -31,14 +31,14 @@ Configuration is resolved in this order:
 
 ### Environment Variables
 
-| Variable | Description |
-| --- | --- |
-| `CLOUDFLARE_KV_URL` | Worker URL in `cfkv://` or `redis+cfkv://` format |
-| `CLOUDFLARE_KV_TOKEN` | Bearer token for the Worker |
-| `CLOUDFLARE_KV_TIMEOUT_MS` | Request timeout in milliseconds |
-| `CLOUDFLARE_KV_KEY_PREFIX` | Prefix applied to keys before requests are sent |
-| `CLOUDFLARE_KV_TRANSPORT` | Transport mode: `http` or `ws` |
-| `CLOUDFLARE_KV_WS_URL` | Optional WebSocket URL override for custom routes |
+| Variable                   | Description                                       |
+| -------------------------- | ------------------------------------------------- |
+| `CLOUDFLARE_KV_URL`        | Worker URL in `cfkv://` or `redis+cfkv://` format |
+| `CLOUDFLARE_KV_TOKEN`      | Bearer token for the Worker                       |
+| `CLOUDFLARE_KV_TIMEOUT_MS` | Request timeout in milliseconds                   |
+| `CLOUDFLARE_KV_KEY_PREFIX` | Prefix applied to keys before requests are sent   |
+| `CLOUDFLARE_KV_TRANSPORT`  | Transport mode: `http` or `ws`                    |
+| `CLOUDFLARE_KV_WS_URL`     | Optional WebSocket URL override for custom routes |
 
 ### URL Format
 
@@ -130,27 +130,27 @@ Pub/sub behavior:
 
 The current surface focuses on string and key operations.
 
-| Method | Status | Caveat |
-| --- | --- | --- |
-| `get` | supported | returns `string | null` |
-| `set` | supported | returns `"OK"` or `null` for rejected conditional writes |
-| `del` | supported | integer reply |
-| `exists` | supported | integer reply |
-| `mget` | supported | ordered array of values |
-| `mset` | supported | object-based input in v1 |
-| `expire` | supported | seconds mapped to Worker TTL ms |
-| `pexpire` | supported | millisecond TTL |
-| `ttl` | supported | derived from Worker ms TTL |
-| `pttl` | supported | raw ms TTL |
-| `persist` | supported | removes TTL if Worker supports it |
-| `type` | supported | returns `string` or `none` |
-| `pipeline` | supported | local queued batch executor |
-| `multi` | emulated | requires `allowEmulatedCommands: true`, not atomic |
-| `publish` | supported | uses pub/sub WS when active, otherwise HTTP fallback |
-| `subscribe` | supported | exact channel names only, requires WebSocket support |
-| `unsubscribe` | supported | exact channel names only, requires WebSocket support |
-| `quit` | supported | returns `"OK"` |
-| `disconnect` | supported | no-op compatibility method |
+| Method        | Status    | Caveat                                                   |
+| ------------- | --------- | -------------------------------------------------------- | ----- |
+| `get`         | supported | returns `string                                          | null` |
+| `set`         | supported | returns `"OK"` or `null` for rejected conditional writes |
+| `del`         | supported | integer reply                                            |
+| `exists`      | supported | integer reply                                            |
+| `mget`        | supported | ordered array of values                                  |
+| `mset`        | supported | object-based input in v1                                 |
+| `expire`      | supported | seconds mapped to Worker TTL ms                          |
+| `pexpire`     | supported | millisecond TTL                                          |
+| `ttl`         | supported | derived from Worker ms TTL                               |
+| `pttl`        | supported | raw ms TTL                                               |
+| `persist`     | supported | removes TTL if Worker supports it                        |
+| `type`        | supported | returns `string` or `none`                               |
+| `pipeline`    | supported | local queued batch executor                              |
+| `multi`       | emulated  | requires `allowEmulatedCommands: true`, not atomic       |
+| `publish`     | supported | uses pub/sub WS when active, otherwise HTTP fallback     |
+| `subscribe`   | supported | exact channel names only, requires WebSocket support     |
+| `unsubscribe` | supported | exact channel names only, requires WebSocket support     |
+| `quit`        | supported | returns `"OK"`                                           |
+| `disconnect`  | supported | no-op compatibility method                               |
 
 ### Unsupported API Families
 
@@ -178,7 +178,7 @@ const result = await redis.pipeline().get('a').set('a', '2').del('a').exec()
 Result format matches common `ioredis` tuple style:
 
 ```ts
-[
+;[
   [null, '1'],
   [null, 'OK'],
   [null, 1]

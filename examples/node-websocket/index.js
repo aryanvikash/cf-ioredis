@@ -1,21 +1,21 @@
-const { Redis } = require("../../dist/index.cjs");
+const { Redis } = require('../../dist/index.cjs')
 
 const redis = new Redis({
-  url: "cfkv://test@cf-redis-kv-worker.aryanvikash.workers.dev",
-  transport: "ws",
-});
+  url: 'cfkv://test@cf-redis-kv-worker.aryanvikash.workers.dev',
+  transport: 'ws'
+})
 
 async function main() {
-  await redis.set("example:ws:test", "hello from ws");
-  const value = await redis.get("example:ws:test");
-  console.log("value:", value);
+  await redis.set('example:ws:test', 'hello from ws')
+  const value = await redis.get('example:ws:test')
+  console.log('value:', value)
 }
 
-(async () => {
+;(async () => {
   try {
-    await main();
-    console.log("DONE");
+    await main()
+    console.log('DONE')
   } finally {
-    await redis.quit();
+    await redis.quit()
   }
-})();
+})()

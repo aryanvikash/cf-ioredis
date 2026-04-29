@@ -1,6 +1,9 @@
 {
   "name": "cf-ioredis",
   "version": "0.1.2",
+  "repository": {
+    "url": "https://github.com/aryanvikash/cf-ioredis"
+  },
   "description": "ioredis-style client backed by Cloudflare KV over HTTP and WebSocket",
   "author": "Aryan Vikash",
   "license": "MIT",
@@ -31,7 +34,13 @@
     "test:integration:local": "vitest run test/integration/localWorker.test.ts",
     "bench:local": "vitest run test/integration/localWorker.test.ts -t latency",
     "test:all": "npm test && npm run test:integration",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "prepare": "husky || true"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,jsx,json,md,yml,yaml}": "prettier --write"
   },
   "keywords": [
     "redis",
@@ -46,6 +55,9 @@
   "devDependencies": {
     "@types/node": "^24.0.0",
     "hono": "^4.8.3",
+    "husky": "^9.1.7",
+    "lint-staged": "^15.2.10",
+    "prettier": "^3.3.3",
     "tsup": "^8.5.0",
     "typescript": "^5.8.3",
     "vitest": "^3.1.1"

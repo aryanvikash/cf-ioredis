@@ -26,7 +26,7 @@ export class UnsupportedCommandError extends RedisKvError {
   readonly command: string
 
   constructor(command: string, message?: string) {
-    super(message ?? `Command \`${command}\` is not supported by this Cloudflare KV-backed client`)
+    super(message ?? `Command \`${command}\` is not supported by this client`)
     this.name = 'UnsupportedCommandError'
     this.command = command
   }
